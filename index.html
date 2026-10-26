@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Незанавешенное</title>
+<meta name="description" content="Незанавешенное — художественная проза на фасаде ночного многоэтажного дома. Спускайся по этажам и заглядывай в окна.">
+<meta name="theme-color" content="#000000">
+<link rel="preload" href="img/d/cover.webp" as="image" media="(min-aspect-ratio: 9/10) and (min-width: 700px)">
+<link rel="preload" href="img/m/cover.webp" as="image" media="(max-aspect-ratio: 9/10), (max-width: 699px)">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main>
+  <section id="story" aria-label="Незанавешенное. Кто живёт за этими окнами?">
+    <div id="stage">
+      <div id="tiles"></div>
+      <div id="plates"></div>
+      <div id="dim"></div>
+      <div id="fade"></div>
+      <div id="attached"></div>
+      <div id="frame"></div>
+    </div>
+  </section>
+
+  <section id="after" aria-label="Под домом">
+    <div class="col">
+      <div class="acc">
+        <button class="acc-h" type="button" aria-expanded="false" aria-controls="acc1">Как это сделано<span class="pm" aria-hidden="true"></span></button>
+        <div class="acc-b" id="acc1"><div><div class="acc-in">
+          <p class="p">Это художественная проза на фасаде ночного дома. Квартиры и жильцы вымышлены.</p>
+          <p class="p-mono">Моноширинным набрано то, что видно.</p>
+          <p class="p-ital">Курсивом — то, что мы достраиваем.</p>
+          <p class="p">Иллюстрации я сделала в Midjourney и ChatGPT по своим описаниям, раскадровку собрала в Figma. Код страницы написан с помощью Claude по моей раскадровке.</p>
+        </div></div></div>
+      </div>
+      <div class="acc">
+        <button class="acc-h" type="button" aria-expanded="false" aria-controls="acc2">Источники и кредиты<span class="pm" aria-hidden="true"></span></button>
+        <div class="acc-b" id="acc2"><div><div class="acc-in">
+          <div class="src"><div><p class="src-t">«Шар улетел»</p><p class="src-a">Сергей Лучишкин. Третьяковская галерея</p></div><span class="src-y">1926</span></div>
+          <div class="src"><div><p class="src-t">«Спящие» (Les Dormeurs)</p><p class="src-a">Софи Калль</p></div><span class="src-y">1979</span></div>
+          <div class="src"><div><p class="src-t">«The Neighbors»</p><p class="src-a">Арне Свенсон</p></div><span class="src-y">2012</span></div>
+          <div class="src"><div><p class="src-t">«FAQ: Лингвистический анализ рассказов»</p><p class="src-a">Мира Бергельсон, ПостНаука</p></div><span class="src-y">2014</span></div>
+          <div class="src"><div><p class="src-t"><a href="https://fonts.google.com/specimen/Literata" target="_blank" rel="noopener">Literata</a> и <a href="https://fonts.google.com/specimen/IBM+Plex+Mono" target="_blank" rel="noopener">IBM Plex Mono</a></p><p class="src-a">Шрифты, SIL Open Font License</p></div></div>
+        </div></div></div>
+      </div>
+      <dl class="meta">
+        <dt>Автор</dt><dd>Дарья Морозова</dd>
+        <dt>Группа</dt><dd>Б25ДЗ10</dd>
+        <dt>Преподаватель</dt><dd>Олег Пащенко</dd>
+        <dt>Год</dt><dd>2026</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+<script src="js/lenis.min.js"></script>
+<script src="js/story.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
