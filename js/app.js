@@ -35,7 +35,8 @@
   let stepEls = [];     // [{el, items:[{el, at, until}], blocks}]
   let attachedEl = null, hintEl = null, crowEl = null, crowImgs = [];
   let lastKey = '';
-  let crow = { running: false, t0: 0, done: false, armedAt: 0 };
+  let crow = { running: false, t0: 0, done: false, armedAt: 0, light: 0 };
+  let crowSeg = null, crowNext = null;
   let fontsReady = false;
 
   // ---------- построение ----------
@@ -88,11 +89,25 @@
     const c = L.cover;
     attachedEl = document.createElement('div');
     attachedEl.className = 'attached';
+    if (c.fig && window.FIGTEXT) {
+      // обложка по слоям Figma: кегль, интерлиньяж, положение
+      const F = window.FIGTEXT, A = window.FIGARROW;
+      const st = (f, extra) => `left:${f.x + f.w / 2}px;top:${f.y + f.lines[0].y}px;font-family:var(--${f.fam});font-style:${f.it ? 'italic' : 'normal'};font-weight:${f.wgt};font-size:${f.size}px;line-height:${f.lines[0].lh}px;color:${f.col};` + (f.shadow ? `text-shadow:${f.shadow};` : 'text-shadow:none;') + (extra || '');
+      const T = F[c.fig.title], S = F[c.fig.sub], H = F[c.fig.hint];
+      const hl = H.lines[0];
+      attachedEl.innerHTML =
+        `<h1 class="title" style="${st(T)}">${T.lines.map(l => l.t).join(' ')}</h1>` +
+        `<p class="sub" style="${st(S)}">${S.lines[0].t}</p>` +
+        `<div class="hint fig" style="${st(H, `gap:0;color:rgba(227,209,148,${H.op});`)}"><span>${hl.t}</span>` +
+        `<svg width="${A.w}" height="${A.h}" viewBox="0 0 ${A.w} ${A.h}" style="margin-top:${(A.y - H.y - hl.y - hl.lh).toFixed(2)}px;margin-left:${(A.x + A.w / 2 - (H.x + H.w / 2)) * 2}px;overflow:visible" aria-hidden="true"><path d="${A.d}" fill="currentColor"/></svg></div>`;
+      c.title.y = T.y; c.sub.y = S.y; c.hint.y = H.y + hl.y;
+    } else {
     attachedEl.innerHTML =
       `<h1 class="title" style="left:${c.title.x}px;top:${c.title.y}px">${c.title.text}</h1>` +
       `<p class="sub" style="left:${c.sub.x}px;top:${c.sub.y}px">${c.sub.text}</p>` +
       `<div class="hint" style="left:${c.hint.x}px;top:${c.hint.y}px"><span>${c.hint.text}</span>` +
       `<svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path d="M6 1v15M1.2 11.2 6 16l4.8-4.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>`;
+    }
     layers.attached.appendChild(attachedEl);
     hintEl = attachedEl.querySelector('.hint');
 
@@ -106,8 +121,28 @@
       const items = [];
       const blocks = [];
       const exitsAt = new Set();
-      for (const b of st.texts) for (const it of b.items) if (it.until != null) exitsAt.add(it.until);
+      for (const b of st.texts) { if (b.fig) { if (b.until != null) exitsAt.add(b.until); continue; } for (const it of b.items) if (it.until != null) exitsAt.add(it.until); }
       for (const b of st.texts) {
+        if (b.fig) {
+          // текстовый слой из Figma: те же строки, кегль, интерлиньяж и положение, что в макете
+          const f = window.FIGTEXT[b.fig];
+          const be = document.createElement('div');
+          be.className = 'blk fig a-' + f.a;
+          be.style.left = f.x + 'px'; be.style.top = f.y + 'px'; be.style.width = f.w + 'px';
+          const ie = document.createElement('div');
+          ie.className = 'it fig';
+          ie.dataset.fig = b.fig;
+          const font = `font-family:var(--${f.fam});font-style:${f.it ? 'italic' : 'normal'};font-weight:${f.wgt};font-size:calc(${f.size}px * var(--fs));letter-spacing:${f.ls}px;color:${f.col};` + (f.op < 1 ? `opacity:${f.op};` : '');
+          ie.style.cssText = font + `height:calc(${f.h}px * var(--fs));`;
+          ie.innerHTML = f.lines.map((l, i) => `<span class="ln" style="--i:${i};top:calc(${l.y}px * var(--fs));height:calc(${l.lh}px * var(--fs));line-height:calc(${l.lh}px * var(--fs))">${l.t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`).join('');
+          const at = b.at || 0;
+          if (at > 0 && exitsAt.has(at)) ie.style.setProperty('--d', '420ms');
+          be.appendChild(ie);
+          items.push({ el: ie, at, until: b.until == null ? 1e9 : b.until, on: false, out: false });
+          el.appendChild(be);
+          blocks.push({ el: be, b });
+          continue;
+        }
         const be = document.createElement('div');
         be.className = 'blk a-' + (b.a || 'l');
         be.style.top = b.y + 'px';
@@ -178,7 +213,7 @@
     ie.innerHTML = lines.map((l, i) => `<span class="ln" style="--i:${i}">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`).join('');
   }
   function splitAllLines() {
-    for (const s of stepEls) for (const it of s.items) splitItem(it.el);
+    for (const s of stepEls) for (const it of s.items) if (!it.el.dataset.fig) splitItem(it.el);
   }
 
   // ---------- размеры и таймлайн ----------
@@ -189,7 +224,7 @@
     if (hChanged || !segs.length) {
       const progress = total ? clamp((window.scrollY - story.offsetTop) / total, 0, 1) : 0;
       unit = window.innerHeight / 100;
-      segs = []; total = 0;
+      segs = []; total = 0; crowSeg = null; crowNext = null;
       L.steps.forEach((st, i) => {
         if (i > 0) { const len = (st.move || MOVE) * unit; segs.push({ type: 'move', from: i - 1, to: i, start: total, len }); total += len; }
         const se = stepEls[i];
@@ -204,27 +239,36 @@
     const k = Math.max(vw / FW, vh / FH);
     const ox = (vw - FW * k) / 2, oy = (vh - FH * k) / 2;
     let fs = 1;
-    if (mode === 'desktop' && k < 0.82) fs = Math.min(1.45, 0.82 / k);
+    if (mode === 'desktop' && k < 0.72) fs = Math.min(1.35, 0.72 / k);
     layers.frame.style.setProperty('--fs', fs);
     layers.frame.style.transform = `translate(${ox}px,${oy}px) scale(${k})`;
     layers.frame.dataset.k = k;
     // видимая часть кадра — чтобы текст не обрезался на очень широких/высоких экранах
     const vx0 = -ox / k, vy0 = -oy / k, vx1 = (vw - ox) / k, vy1 = (vh - oy) / k;
     const m = mode === 'mobile' ? 14 : 28;
-    for (const s of stepEls) for (const bl of s.blocks) {
-      const e = bl.el; e.style.transform = '';
-      const x = e.offsetLeft, y = e.offsetTop, w = e.offsetWidth;
-      let h = 0; for (const c of e.children) h = Math.max(h, c.offsetTop + c.offsetHeight);
-      // фактическая ширина строк
-      let minL = 1e9, maxR = -1e9;
-      for (const ln of e.querySelectorAll('.ln')) { const l = x + ln.offsetLeft; minL = Math.min(minL, l); maxR = Math.max(maxR, l + ln.offsetWidth); }
-      if (minL > maxR) { minL = x; maxR = x + w; }
+    // все надписи кадра сдвигаются вместе, чтобы не наезжали друг на друга
+    for (const s of stepEls) {
+      let minL = 1e9, maxR = -1e9, minT = 1e9, maxB = -1e9;
+      for (const bl of s.blocks) {
+        const e = bl.el; e.style.transform = '';
+        const x = e.offsetLeft, y = e.offsetTop, w = e.offsetWidth;
+        let h = e.offsetHeight; for (const c of e.children) h = Math.max(h, c.offsetTop + c.offsetHeight);
+        let l0 = 1e9, r0 = -1e9;
+        for (const ln of e.querySelectorAll('.ln')) {
+          const r = document.createRange(); r.selectNodeContents(ln); const rc = r.getBoundingClientRect(), pc = layers.frame.getBoundingClientRect();
+          const kk = +layers.frame.dataset.k || 1;
+          if (rc.width) { l0 = Math.min(l0, (rc.left - pc.left) / kk); r0 = Math.max(r0, (rc.right - pc.left) / kk); }
+        }
+        if (l0 > r0) { l0 = x; r0 = x + w; }
+        minL = Math.min(minL, l0); maxR = Math.max(maxR, r0); minT = Math.min(minT, y); maxB = Math.max(maxB, y + h);
+      }
+      if (minL > maxR) continue;
       let dx = 0, dy = 0;
       if (maxR > vx1 - m) dx = vx1 - m - maxR;
       if (minL + dx < vx0 + m) dx = vx0 + m - minL;
-      if (y + h > vy1 - m) dy = vy1 - m - (y + h);
-      if (y + dy < vy0 + m) dy = vy0 + m - y;
-      if (dx || dy) e.style.transform = `translate(${dx}px,${dy}px)`;
+      if (maxB > vy1 - m) dy = vy1 - m - maxB;
+      if (minT + dy < vy0 + m) dy = vy0 + m - minT;
+      if (dx || dy) for (const bl of s.blocks) bl.el.style.transform = `translate(${dx}px,${dy}px)`;
     }
     lastKey = '';
   }
@@ -266,7 +310,7 @@
     }
     return pe.twin;
   }
-  function showPlate(name, V, op, z, feather, twin) {
+  function showPlate(name, V, op, z, feather, twin, focusR) {
     const pe = plateEls[name]; if (!pe) return;
     if (pe.el.dataset.src && !pe.el.src) load(pe.el);
     const t = twin ? twinOf(pe) : pe;
@@ -277,7 +321,19 @@
     t.el.style.opacity = op;
     t.el.style.zIndex = z;
     const f = feather || 0;
-    if (f > 0.5) {
+    const fr = pe.p.focus && focusR != null ? focusR : 0;
+    if (fr > 0.001) {
+      // крупный план сжимается к самому окну: вокруг виден обычный фасад, без прямоугольного шва
+      const [x0, y0, x1, y1] = pe.p.focus, e = 0.12, ease = fr * fr * (3 - 2 * fr);
+      const s0 = 0.07; // края кадра растушёваны с первого же кадра движения
+      const L0 = lerp(0, x0 - e, ease), L1 = lerp(s0, x0, ease), R1 = lerp(1 - s0, x1, ease), R0 = lerp(1, x1 + e, ease);
+      const T0 = lerp(0, y0 - e, ease), T1 = lerp(s0, y0, ease), B1 = lerp(1 - s0, y1, ease), B0 = lerp(1, y1 + e, ease);
+      const P = v => (v * 100).toFixed(2) + '%';
+      const m = `linear-gradient(to right,transparent ${P(L0)},#000 ${P(L1)},#000 ${P(R1)},transparent ${P(R0)}),linear-gradient(to bottom,transparent ${P(T0)},#000 ${P(T1)},#000 ${P(B1)},transparent ${P(B0)})`;
+      t.el.style.webkitMaskImage = m; t.el.style.maskImage = m;
+      t.el.style.webkitMaskComposite = 'source-in'; t.el.style.maskComposite = 'intersect';
+      t.masked = true;
+    } else if (f > 0.5) {
       const m = `linear-gradient(to right,transparent 0,#000 ${f}px,#000 calc(100% - ${f}px),transparent 100%),linear-gradient(to bottom,transparent 0,#000 ${f}px,#000 calc(100% - ${f}px),transparent 100%)`;
       t.el.style.webkitMaskImage = m; t.el.style.maskImage = m;
       t.el.style.webkitMaskComposite = 'source-in'; t.el.style.maskComposite = 'intersect';
@@ -324,7 +380,7 @@
       const wn = worldOf(st);
       showTiles(wn, V);
       if (st.plate) showPlate(st.plate, V, 1, 2, 0, false);
-      dim = st.dim || 0;
+      dim = dimOf(st);
       if (st.final) endFade = 1;
       textStep = i;
       const se = stepEls[i];
@@ -350,16 +406,19 @@
         const fade = same ? smooth(0.1, 0.9, t) : (rb < ra ? smooth(0.32, 0.95, t) : smooth(0.05, 0.62, t));
         const bell = Math.sin(Math.PI * t);
         const kv = vw / V.w;
+        // крупный план с «фокусом» (окно): уходя — сразу сужается к окну, приходя — раскрывается в самом конце
+        const rA = L.plates[pa] && L.plates[pa].focus && !same ? smooth(0, 0.1, t) : null;
+        const rB = L.plates[pb] && L.plates[pb].focus && !same ? 1 - smooth(0.9, 1, t) : null;
         if (pa && pb) {
           const fB = Math.min(L.plates[pb].rect[2], L.plates[pb].rect[3]) * kv * 0.2 * bell;
           const fA = Math.min(L.plates[pa].rect[2], L.plates[pa].rect[3]) * kv * 0.2 * bell;
-          showPlate(pa, V, 1, 2, 0, false);
-          showPlate(pb, V, 1, 3, same ? 0 : fB, false);
-          showPlate(pa, V, (1 - fade).toFixed(3), 4, same ? 0 : fA, true);
+          showPlate(pa, V, 1, 2, 0, false, rA);
+          showPlate(pb, V, 1, 3, same ? 0 : fB, false, rB);
+          showPlate(pa, V, (1 - fade).toFixed(3), 4, same ? 0 : fA, true, rA);
         } else if (pb) {
-          showPlate(pb, V, fade.toFixed(3), 3, Math.min(L.plates[pb].rect[2], L.plates[pb].rect[3]) * kv * 0.2 * bell, false);
+          showPlate(pb, V, fade.toFixed(3), 3, Math.min(L.plates[pb].rect[2], L.plates[pb].rect[3]) * kv * 0.2 * bell, false, rB);
         } else if (pa) {
-          showPlate(pa, V, (1 - fade).toFixed(3), 3, Math.min(L.plates[pa].rect[2], L.plates[pa].rect[3]) * kv * 0.2 * bell, false);
+          showPlate(pa, V, (1 - fade).toFixed(3), 3, Math.min(L.plates[pa].rect[2], L.plates[pa].rect[3]) * kv * 0.2 * bell, false, rA);
         }
       } else {
         // переход между разными «мирами» — растворение с лёгким наездом
@@ -375,7 +434,7 @@
         }
         V = t < 0.5 ? VA2 : VB2;
       }
-      dim = lerp(A.dim || 0, B.dim || 0, smooth(0.1, 0.9, t));
+      dim = lerp(dimOf(A), dimOf(B), smooth(0.1, 0.9, t));
       if (B.final) endFade = smooth(0.3, 1, t);
       if (seg.from === 0) positionAttached(V, 1); else layers.attached.style.display = 'none';
     }
@@ -388,8 +447,11 @@
     hintEl.classList.toggle('gone', scrolled);
 
     updateTexts(textStep, beat, exiting);
-    updateCrow(textStep, beat, exiting);
+    updateCrow(pos);
   }
+
+  // затемнение шага; у вороны оно уходит, пока она пролетает
+  function dimOf(st) { return st.crow ? (st.dim || 0) * (1 - crow.light) : (st.dim || 0); }
 
   function positionAttached(V, show) {
     if (!show) { layers.attached.style.display = 'none'; return; }
@@ -424,21 +486,35 @@
   }
 
   // ---------- ворона ----------
-  function updateCrow(si, beat, exiting) {
-    const st = L.steps[si];
-    const inCrow = st && st.crow && !exiting;
-    const now = performance.now();
-    if (!inCrow) {
-      if (crow.armedAt || crow.running || crow.done) resetCrow();
-      return;
+  // Ворона: взлетает через ~1 с после того, как текст вороны появился, и долетает сама,
+  // даже если читатель уже листает дальше. Пока она летит, экран светлеет.
+  // Если вернуться выше этого места, всё повторится заново.
+  function updateCrow(pos) {
+    if (!crowSeg) {
+      const ci = L.steps.findIndex(s => s.crow);
+      crowSeg = segs.find(s => s.type === 'hold' && s.step === ci);
+      crowNext = segs.find(s => s.type === 'move' && s.from === ci);
+      if (!crowSeg) return;
     }
+    const now = performance.now();
+    if (pos < crowSeg.start) { if (crow.armedAt || crow.running || crow.done) resetCrow(); return; }
+    const farEnd = crowNext ? crowNext.start + crowNext.len * 2 : crowSeg.start + crowSeg.len * 2;
+    if (pos > farEnd && !crow.done) { finishCrow(); return; }
+    if (crow.done || crow.running) return;
     if (!crow.armedAt) crow.armedAt = now;
-    if (!crow.running && !crow.done && now - crow.armedAt > 1700) { crow.running = true; crow.t0 = now; }
+    const late = pos > crowSeg.start + crowSeg.len * 0.45;
+    if (late || now - crow.armedAt > 1000) { crow.running = true; crow.t0 = now; }
+  }
+  function textElOfCrow() { return stepEls[L.steps.findIndex(s => s.crow)]; }
+  function finishCrow() {
+    crow.running = false; crow.done = true; crow.light = 1;
+    crowEl.style.opacity = 0;
+    const s = textElOfCrow(); if (s) s.el.style.opacity = 0;
   }
   function resetCrow() {
-    crow = { running: false, t0: 0, done: false, armedAt: 0 };
+    crow = { running: false, t0: 0, done: false, armedAt: 0, light: 0 };
     crowEl.style.opacity = 0;
-    const s = stepEls[L.steps.findIndex(s => s.crow)];
+    const s = textElOfCrow();
     if (s) s.el.style.opacity = '';
   }
   function tickCrow(now) {
@@ -455,7 +531,8 @@
     crowImgs[1].style.opacity = flap ? 1 : 0;
     const s = stepEls[L.steps.findIndex(s => s.crow)];
     s.el.style.opacity = (1 - smooth(0.42, 0.92, p)).toFixed(3);
-    if (p >= 1) { crow.running = false; crow.done = true; crowEl.style.opacity = 0; }
+    crow.light = smooth(0.45, 1, p);
+    if (p >= 1) finishCrow();
   }
 
   // ---------- загрузка картинок ----------

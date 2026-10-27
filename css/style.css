@@ -139,3 +139,10 @@ body{margin:0;font-optical-sizing:auto;font-synthesis:none;background:#000;font-
 @media (prefers-reduced-motion:reduce){
   .hint>*{animation:none}
 }
+/* текст по слоям Figma (компьютер) */
+.blk.fig{text-shadow:none}
+.it.fig{position:relative}
+.it.fig .ln{position:absolute;left:0;right:0;white-space:pre}
+.blk.fig.a-l .ln{text-align:left}.blk.fig.a-c .ln{text-align:center}.blk.fig.a-r .ln{text-align:right}
+.hint.fig{display:flex;flex-direction:column;align-items:center}
+.blk.fig .it.fig{align-self:stretch;width:100%}
